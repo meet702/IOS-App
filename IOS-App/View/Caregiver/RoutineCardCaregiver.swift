@@ -1,13 +1,6 @@
-//
-//  RoutineCardCaregiver.swift
-//  Match the Pairs Test
-//
-//  Created by SDC-USER on 05/12/25.
-//
-
 import UIKit
 
-class RoutineCardCaregiver: UICollectionViewCell {
+final class RoutineCardCaregiver: UICollectionViewCell {
 
     @IBOutlet weak var cardView: UIView!         // rounded white background
     @IBOutlet weak var stackView: UIStackView!   // vertical stack inside card
@@ -16,6 +9,14 @@ class RoutineCardCaregiver: UICollectionViewCell {
     private let cornerRadius: CGFloat = 34
     private let dividerInset: CGFloat = 12
     private let dividerTag = 999
+
+    // time formatter for the right-hand label
+    private lazy var timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
 
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -56,51 +57,76 @@ class RoutineCardCaregiver: UICollectionViewCell {
         }
     }
 
-    // MARK: - Configure
+    // MARK: - Public configure
 
-    /// Pending section is presented before Completed (per facilitator request)
-    func configureRoutineCell(completed: [RoutineCardModel], pending: [RoutineCardModel]) {
-        // clear anything left (defensive)
+    /// Configure a single cell using the full list of TaskModel for a date.
+    /// The cell will group by time-of-day and display only the current period on the Home card.
+    func configureRoutineCell(tasks: [TaskModel], date: Date = Date()) {
+        // defensive clear
         stackView.arrangedSubviews.forEach {
             stackView.removeArrangedSubview($0)
             $0.removeFromSuperview()
         }
 
-        // Build the card: header "Pending" first, then header "Completed"
-        addSection(title: "Pending", items: pending, placeholder: "No pending tasks")
-        addSection(title: "Completed", items: completed, placeholder: "No tasks completed yet")
+        // sort tasks by time ascending
+        let sorted = tasks.sorted { $0.time < $1.time }
 
-        // remove final divider if present
+        // split to pending/completed
+        let pending = sorted.filter { !$0.isCompleted }
+        let completed = sorted.filter { $0.isCompleted }
+
+        // group by time of day
+        let morning = (pending + completed).filter { Self.isInMorning($0.time) }
+        let afternoon = (pending + completed).filter { Self.isInAfternoon($0.time) }
+        let evening = (pending + completed).filter { Self.isInEvening($0.time) }
+
+        // pick which period to show based on "date" (usually now)
+        let currentPeriod = Self.currentPeriod(for: date)
+
+        // show only current period - split into upcoming/completed within that period
+        var periodTasks: [TaskModel] = []
+        switch currentPeriod {
+        case .morning: periodTasks = morning
+        case .afternoon: periodTasks = afternoon
+        case .evening: periodTasks = evening
+        }
+
+        let periodPending = periodTasks.filter { !$0.isCompleted }.sorted { $0.time < $1.time }
+        let periodCompleted = periodTasks.filter { $0.isCompleted }.sorted { $0.time < $1.time }
+
+        // If you want: if there are no tasks in current period, fall back to nearest future period.
+        // For now we strictly show the current period (per your request).
+        addSection(title: "Upcoming", items: periodPending, placeholder: "No pending tasks")
+        addSection(title: "Completed", items: periodCompleted, placeholder: "No tasks completed yet")
+
         removeTrailingDividerIfNeeded()
     }
 
-    // MARK: - Section builder (shared grey background containing multiple rows)
+    // MARK: - Section builder
 
-    private func addSection(title: String, items: [RoutineCardModel], placeholder: String) {
-        // header
+    private func addSection(title: String, items: [TaskModel], placeholder: String) {
         addSectionHeader(title: title)
 
-        // container that will hold all rows and provide the shared grey background
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.backgroundColor = UIColor(white: 0.95, alpha: 1)
         container.layer.cornerRadius = 20
         container.clipsToBounds = true
+        container.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        container.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        // inner stack where each row is a transparent view (so grey container shows through)
         let innerStack = UIStackView()
         innerStack.axis = .vertical
         innerStack.spacing = 0
         innerStack.alignment = .fill
         innerStack.distribution = .fill
         innerStack.translatesAutoresizingMaskIntoConstraints = false
-
-        // --- IMPORTANT: use layout margins so both rows and dividers align to the same inset ---
         innerStack.isLayoutMarginsRelativeArrangement = true
-        innerStack.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        innerStack.layoutMargins = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        innerStack.setContentHuggingPriority(.required, for: .vertical)
+        innerStack.setContentCompressionResistancePriority(.required, for: .vertical)
 
         container.addSubview(innerStack)
-        // pin inner stack to container
         NSLayoutConstraint.activate([
             innerStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             innerStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -108,9 +134,7 @@ class RoutineCardCaregiver: UICollectionViewCell {
             innerStack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
 
-        // add rows (or placeholder) to innerStack
         if items.isEmpty {
-            // placeholder row inside shared background
             let placeholderRow = UIView()
             placeholderRow.translatesAutoresizingMaskIntoConstraints = false
             placeholderRow.backgroundColor = .clear
@@ -123,8 +147,6 @@ class RoutineCardCaregiver: UICollectionViewCell {
 
             placeholderRow.addSubview(label)
             NSLayoutConstraint.activate([
-                // note: label leading/trailing are 0 relative to the row because the innerStack
-                // already provides horizontal margins
                 label.leadingAnchor.constraint(equalTo: placeholderRow.leadingAnchor, constant: 0),
                 label.trailingAnchor.constraint(lessThanOrEqualTo: placeholderRow.trailingAnchor, constant: 0),
                 label.topAnchor.constraint(equalTo: placeholderRow.topAnchor, constant: 12),
@@ -138,15 +160,13 @@ class RoutineCardCaregiver: UICollectionViewCell {
                 let row = makeTransparentRow(for: item)
                 innerStack.addArrangedSubview(row)
 
-                // add internal divider between rows (not after last)
                 if index < items.count - 1 {
                     let div = UIView()
                     div.translatesAutoresizingMaskIntoConstraints = false
-                    div.backgroundColor = UIColor(white: 0.85, alpha: 1) // your bold divider color
+                    div.backgroundColor = UIColor(white: 0.85, alpha: 1)
                     innerStack.addArrangedSubview(div)
                     NSLayoutConstraint.activate([
                         div.heightAnchor.constraint(equalToConstant: 1),
-                        // pin to innerStack's layout margins so divider has left/right padding
                         div.leadingAnchor.constraint(equalTo: innerStack.layoutMarginsGuide.leadingAnchor),
                         div.trailingAnchor.constraint(equalTo: innerStack.layoutMarginsGuide.trailingAnchor)
                     ])
@@ -154,81 +174,102 @@ class RoutineCardCaregiver: UICollectionViewCell {
             }
         }
 
-            // add container to main stack and make it match width
-            stackView.addArrangedSubview(container)
-            container.widthAnchor.constraint(equalTo: stackView.widthAnchor).isActive = true
-
-    //        addDivider() // divider below the shared section (consistent with previous behavior)
+        // IMPORTANT: do NOT add an explicit width constraint to container.
+        // Let the stack view size managed by its own constraints to avoid distortion.
+        stackView.addArrangedSubview(container)
     }
 
-
-    private func makeTransparentRow(for item: RoutineCardModel) -> UIView {
+    private func makeTransparentRow(for item: TaskModel) -> UIView {
         let row = UIView()
         row.translatesAutoresizingMaskIntoConstraints = false
         row.backgroundColor = .clear
 
+        // Title
         let titleLabel = UILabel()
-        titleLabel.font = UIFont.systemFont(ofSize: 16)
+        titleLabel.font = UIFont.systemFont(ofSize: 15)
         titleLabel.text = item.title
         titleLabel.numberOfLines = 1
-        titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        // Time
         let timeLabel = UILabel()
         timeLabel.font = UIFont.systemFont(ofSize: 14)
-        timeLabel.text = item.timeText
+        timeLabel.text = timeFormatter.string(from: item.time)
         timeLabel.textAlignment = .right
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        timeLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
+        // Make labels resist vertical compression so they keep readable heights
+        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        timeLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        titleLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        timeLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         row.addSubview(titleLabel)
         row.addSubview(timeLabel)
 
-        if let sub = item.subtitle, !sub.isEmpty {
+        if let sub = item.description, !sub.isEmpty {
+            // Subtitle case: allow the row to grow with subtitle, but still enforce a minimum
             let subtitleLabel = UILabel()
             subtitleLabel.font = UIFont.systemFont(ofSize: 12)
             subtitleLabel.textColor = UIColor(white: 0.55, alpha: 1)
             subtitleLabel.text = sub
             subtitleLabel.numberOfLines = 0
-            subtitleLabel.lineBreakMode = .byWordWrapping
             subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+            // stronger priorities for subtitle block
+            subtitleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+            subtitleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
             row.addSubview(subtitleLabel)
 
             NSLayoutConstraint.activate([
-                // use 0 leading because innerStack provides the 12pt margin
-                titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 0),
-                titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 12),
+                // title at top
+                titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 12),
+                titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
 
-                subtitleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 0),
+                // subtitle under title
+                subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
                 subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
                 subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
 
-                timeLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: 0),
-                timeLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                // time aligned to the right, vertically centered roughly with the title/subtitle block
+                timeLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -12),
+                timeLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor, constant: 6),
 
-                subtitleLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -12)
+                // bottom anchor for subtitle (defines row height)
+                subtitleLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8),
+
+                // ensure row is at least a minimum even with subtitle present
+                row.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
             ])
         } else {
+            // No subtitle: enforce compact fixed minimum height so rows don't shrink as you add more
             NSLayoutConstraint.activate([
-                titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 0),
-                titleLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 12),
+                titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
+                titleLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8),
+
+                timeLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -12),
+                timeLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+
                 titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
 
-                timeLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: 0),
-                timeLabel.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-
+                // Important: explicit minimum so the stack cannot compress the row smaller than this
                 row.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
             ])
         }
 
+        // visual: dim completed title
+        titleLabel.textColor = item.isCompleted ? UIColor(white: 0.55, alpha: 1) : .black
+
+        // Make the row resist vertical compression relative to other content
+        row.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        row.setContentCompressionResistancePriority(.required, for: .vertical)
+
         return row
     }
+
+
 
 
     private func addSectionHeader(title: String) {
@@ -237,7 +278,7 @@ class RoutineCardCaregiver: UICollectionViewCell {
         label.text = title
         label.textColor = .black
         label.translatesAutoresizingMaskIntoConstraints = false
-        // give header small top/bottom padding by embedding in container
+
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
@@ -267,8 +308,36 @@ class RoutineCardCaregiver: UICollectionViewCell {
         }
     }
 
-    // MARK: - make compositional layout measure the cell properly
-    // This lets the layout use the cell's measured intrinsic height
+    // MARK: - Time of day helpers
+
+    private enum Period {
+        case morning, afternoon, evening
+    }
+
+    private static func isInMorning(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 5 && hour < 12
+    }
+
+    private static func isInAfternoon(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 12 && hour < 18
+    }
+
+    private static func isInEvening(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 18 && hour <= 23 || hour < 5
+    }
+
+    private static func currentPeriod(for date: Date) -> Period {
+        let hour = Calendar.current.component(.hour, from: date)
+        if hour >= 5 && hour < 12 { return .morning }
+        if hour >= 12 && hour < 18 { return .afternoon }
+        return .evening
+    }
+
+    // MARK: - auto-sizing for compositional layout
+
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
         setNeedsLayout()
         layoutIfNeeded()

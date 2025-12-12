@@ -114,8 +114,8 @@ class DataStore {
             tasks[index] = task
             tasks.sort { $0.time < $1.time }
             routinesByDate[key] = tasks
+            NotificationCenter.default.post(name: .DataStoreDidUpdateRoutines, object: nil, userInfo: ["dateKey": key])
         }
-        //print("updating in datastore:", task.id)
 
     }
 
@@ -127,12 +127,14 @@ class DataStore {
         }
         routinesByDate[key]!.append(task)
         routinesByDate[key]?.sort { $0.time < $1.time }
+        NotificationCenter.default.post(name: .DataStoreDidUpdateRoutines, object: nil, userInfo: ["dateKey": key])
     }
 
     func deleteRoutine(for date: Date, at index: Int) {
         let key = dateFormatter.string(from: date)
         guard routinesByDate[key] != nil else { return }
         routinesByDate[key]!.remove(at: index)
+        NotificationCenter.default.post(name: .DataStoreDidUpdateRoutines, object: nil, userInfo: ["dateKey": key])
     }
 
     
@@ -144,4 +146,8 @@ class DataStore {
     }
 
 
+}
+
+extension Notification.Name {
+    static let DataStoreDidUpdateRoutines = Notification.Name("DataStoreDidUpdateRoutines")
 }

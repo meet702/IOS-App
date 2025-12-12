@@ -9,7 +9,9 @@ import UIKit
 
 class HomeViewController: UIViewController {
 
-    @IBOutlet weak var HomeViewController: UICollectionView!
+    @IBOutlet weak var homeCollectionView: UICollectionView!
+    
+    private var selectedDate: Date = Date()
     
     var brainBoosters: [BrainBoostersCardModel] = [
         BrainBoostersCardModel(gameName: "Crossword", gameImage: "Group 353"),
@@ -17,23 +19,36 @@ class HomeViewController: UIViewController {
         BrainBoostersCardModel(gameName: "Match the Pairs", gameImage: "Group 355")
     ]
     
-    var completedTask: [RoutineCardModel] = [
-        RoutineCardModel(title: "Brush teeth", subtitle: "", timeText: "7:45 AM"),
-        RoutineCardModel(title: "Have Breakfast", subtitle: "", timeText: "8:00 AM")
-    ]
-    var pendingTask: [RoutineCardModel] = [
-        RoutineCardModel(title: "Take meds", subtitle: "Vitamin B12 - 1 capsule", timeText: "8:45 AM")
-    ]
-    
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         registerCell()
-        HomeViewController.dataSource = self
-        HomeViewController.delegate = self
-        
+        homeCollectionView.dataSource = self
+        homeCollectionView.delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(dataStoreUpdated(_:)), name: .DataStoreDidUpdateRoutines, object: nil)
         let layout = generateLayout()
-        HomeViewController.setCollectionViewLayout(layout, animated: true)
+        homeCollectionView.setCollectionViewLayout(layout, animated: true)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // ensure the Home card shows today's tasks by default
+        selectedDate = Date()
+        // refresh the layout/data so the Routine card reads the correct date
+        homeCollectionView.reloadData()
+    }
+
+    @objc private func dataStoreUpdated(_ n: Notification) {
+        DispatchQueue.main.async {
+            // If DataStore sends a "dateKey" in userInfo you can check it here and only reload when it matches.
+            // For simplicity we reload only the "My Routine" section (section index 2).
+            let sectionIndex = 2
+            let indexSet = IndexSet(integer: sectionIndex)
+            self.homeCollectionView.reloadSections(indexSet)
+        }
+    }
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func generateLayout() -> UICollectionViewLayout {
@@ -78,13 +93,13 @@ class HomeViewController: UIViewController {
                 // allow the cell to size itself based on its content
                 let itemSize = NSCollectionLayoutSize(
                     widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .fractionalHeight(1.0)   // use a reasonable positive estimate
+                    heightDimension: .estimated(200)
                 )
                 let item = NSCollectionLayoutItem(layoutSize: itemSize)
 
                 let groupSize = NSCollectionLayoutSize(
                     widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .absolute(270)
+                    heightDimension: .estimated(200)
                 )
                 let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
 //                group.interItemSpacing = .fixed(10)
@@ -123,15 +138,15 @@ class HomeViewController: UIViewController {
 
     
     func registerCell() {
-        HomeViewController.register(UINib(nibName: "MemoryRecapCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "memoryRecapCardCollectionViewCell")
+        homeCollectionView.register(UINib(nibName: "MemoryRecapCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "memoryRecapCardCollectionViewCell")
         
-        HomeViewController.register(UINib(nibName: "MemoryLaneCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "memoryLaneCardCollectionViewCell")
+        homeCollectionView.register(UINib(nibName: "MemoryLaneCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "memoryLaneCardCollectionViewCell")
         
-        HomeViewController.register(UINib(nibName: "HeaderView", bundle: nil), forSupplementaryViewOfKind: "header", withReuseIdentifier: "header_cell")
+        homeCollectionView.register(UINib(nibName: "HeaderView", bundle: nil), forSupplementaryViewOfKind: "header", withReuseIdentifier: "header_cell")
         
-        HomeViewController.register(UINib(nibName: "BrainBoostersCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "brainBoostersCardCollectionViewCell")
+        homeCollectionView.register(UINib(nibName: "BrainBoostersCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "brainBoostersCardCollectionViewCell")
         
-        HomeViewController.register(UINib(nibName: "RoutineCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "routineCardCollectionViewCell")
+        homeCollectionView.register(UINib(nibName: "RoutineCardCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: "routineCardCollectionViewCell")
     }
 
 
@@ -171,8 +186,9 @@ extension HomeViewController: UICollectionViewDataSource {
         }
         
         else if indexPath.section == 2 {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "routineCardCollectionViewCell", for: indexPath) as! RoutineCardCollectionViewCell
-            cell.configureRoutineCell(completed: completedTask, pending: pendingTask)
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "routineCardCollectionViewCell", for: indexPath) as! RoutineCardCaregiver
+            let tasks = DataStore.shared.getRoutines(for: selectedDate)
+            cell.configureRoutineCell(tasks: tasks, date: Date())
             return cell
         }
         
@@ -188,17 +204,23 @@ extension HomeViewController: UICollectionViewDataSource {
         let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: "header", withReuseIdentifier: "header_cell", for: indexPath) as! HeaderView
 //        headerView.backgroundColor = .blue
         if indexPath.section == 0 {
-            headerView.configureHeaderCell(text: "Memories")
+            headerView.configureHeaderCell(text: "Memories", showChevron: false, isTappable: false)
         }
         else if indexPath.section == 1 {
-            headerView.configureHeaderCell(text: "Memory Recap")
+            headerView.configureHeaderCell(text: "Memory Recap", showChevron: false, isTappable: false)
         }
         
         else if indexPath.section == 2 {
-            headerView.configureHeaderCell(text: "My Routine")
+            headerView.configureHeaderCell(text: "My Routine",
+                                           showChevron: true,
+                                           isTappable: true,
+                                           onTap: { [weak self] in
+                                               self?.performSegue(withIdentifier: "showRoutine", sender: nil)
+                                           }
+            )
         }
         else {
-            headerView.configureHeaderCell(text: "Brain Boosters")
+            headerView.configureHeaderCell(text: "Brain Boosters", showChevron: false, isTappable: false)
         }
         return headerView
     }

@@ -11,7 +11,7 @@
         <!--Good Morning-->
         <scene sceneID="tne-QT-ifu">
             <objects>
-                <viewController id="BYZ-38-t0r" customClass="HomeViewController" customModule="Match_the_Pairs_Test" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController id="BYZ-38-t0r" customClass="HomeViewController" customModule="IOS_App" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -56,11 +56,12 @@
                         </barButtonItem>
                     </navigationItem>
                     <connections>
-                        <outlet property="HomeViewController" destination="0fL-m1-u87" id="6ee-GL-XLc"/>
+                        <outlet property="homeCollectionView" destination="0fL-m1-u87" id="6ee-GL-XLc"/>
                         <segue destination="jND-Cs-3Av" kind="show" identifier="showSudokuInstructions" id="9ed-4I-5Ze"/>
                         <segue destination="J0M-BW-Zgi" kind="show" identifier="showMatchThePairsInstructions" id="5yp-g0-e0Y"/>
                         <segue destination="sTO-m0-1ML" kind="show" identifier="showCrosswordInstructions" id="0Pi-0I-DDY"/>
                         <segue destination="RLB-Og-J7n" kind="show" identifier="showMemoryRecap" id="F2B-qq-tNP"/>
+                        <segue destination="6ML-I5-3rj" kind="show" identifier="showRoutine" id="HWk-Of-2fe"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
@@ -107,6 +108,16 @@
             </objects>
             <point key="canvasLocation" x="1801" y="275"/>
         </scene>
+        <!--routine_screen-->
+        <scene sceneID="TGw-0N-ZKn">
+            <objects>
+                <viewControllerPlaceholder storyboardName="Routine" referencedIdentifier="routine_screen" id="6ML-I5-3rj" sceneMemberID="viewController">
+                    <navigationItem key="navigationItem" id="zTl-CY-34I"/>
+                </viewControllerPlaceholder>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="eb8-dv-1LH" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="1833" y="325"/>
+        </scene>
         <!--Navigation Controller-->
         <scene sceneID="hha-Er-NN6">
             <objects>
@@ -128,7 +139,7 @@
         <!--Home Profile Table View Controller-->
         <scene sceneID="sOG-i9-P2o">
             <objects>
-                <tableViewController id="Usa-ne-cuV" customClass="HomeProfileTableViewController" customModule="Match_the_Pairs_Test" customModuleProvider="target" sceneMemberID="viewController">
+                <tableViewController id="Usa-ne-cuV" customClass="HomeProfileTableViewController" customModule="IOS_App" customModuleProvider="target" sceneMemberID="viewController">
                     <tableView key="view" clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="static" style="insetGrouped" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="18" estimatedSectionHeaderHeight="-1" sectionFooterHeight="18" estimatedSectionFooterHeight="-1" id="Wck-HO-4qN">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="793"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>

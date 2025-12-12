@@ -21,5 +21,5 @@ struct TaskModel {
     var isCompleted: Bool
     var isRecurring: Bool = false
     var recurrenceID: UUID? = nil
-
+    
 }

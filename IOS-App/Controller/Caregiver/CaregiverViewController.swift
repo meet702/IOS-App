@@ -11,6 +11,8 @@ class CaregiverViewController: UIViewController {
 
     @IBOutlet weak var albumButton: UIButton!
 
+    private var selectedDate: Date = Date()
+    
     func setupAlbumButton() {
         albumButton.setImage(UIImage(systemName: "photo.stack"), for: .normal)
         albumButton.layer.shadowColor = UIColor.black.cgColor
@@ -58,11 +60,31 @@ class CaregiverViewController: UIViewController {
         registerCell()
         caregiverCollectionView.dataSource = self
         setupAlbumButton()
-        
+        NotificationCenter.default.addObserver(self, selector: #selector(dataStoreUpdated(_:)), name: .DataStoreDidUpdateRoutines, object: nil)
         let layout = generateLayout()
         caregiverCollectionView.setCollectionViewLayout(layout, animated: true)
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // ensure the Home card shows today's tasks by default
+        selectedDate = Date()
+        // refresh the layout/data so the Routine card reads the correct date
+        caregiverCollectionView.reloadData()
+    }
+
+    @objc private func dataStoreUpdated(_ n: Notification) {
+        DispatchQueue.main.async {
+            // If DataStore sends a "dateKey" in userInfo you can check it here and only reload when it matches.
+            // For simplicity we reload only the "My Routine" section (section index 2).
+            let sectionIndex = 2
+            let indexSet = IndexSet(integer: sectionIndex)
+            self.caregiverCollectionView.reloadSections(indexSet)
+        }
+    }
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     func generateLayout() -> UICollectionViewLayout {
         let layout = UICollectionViewCompositionalLayout(sectionProvider: {section, env in
@@ -73,13 +95,13 @@ class CaregiverViewController: UIViewController {
             if section == 0 {
                 let itemSize = NSCollectionLayoutSize(
                     widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .fractionalHeight(1.0)
+                    heightDimension: .estimated(200)
                 )
                 let item = NSCollectionLayoutItem(layoutSize: itemSize)
 
                 let groupSize = NSCollectionLayoutSize(
                     widthDimension: .fractionalWidth(1.0),
-                    heightDimension: .absolute(270)
+                    heightDimension: .estimated(200)
                 )
                 let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
 //                group.interItemSpacing = .fixed(10)
@@ -136,7 +158,8 @@ extension CaregiverViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if indexPath.section == 0 {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "routineCardCaregiver", for: indexPath) as! RoutineCardCaregiver
-            cell.configureRoutineCell(completed: completedTask, pending: pendingTask)
+            let tasks = DataStore.shared.getRoutines(for: selectedDate)
+            cell.configureRoutineCell(tasks: tasks, date: Date())
             return cell
         }
         else {
@@ -150,10 +173,16 @@ extension CaregiverViewController: UICollectionViewDataSource {
         // Create the header view
         let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: "header", withReuseIdentifier: "header_cell", for: indexPath) as! HeaderView
         if indexPath.section == 0 {
-            headerView.configureHeaderCell(text: "Routine")
+            headerView.configureHeaderCell(text: "My Routine",
+                                           showChevron: true,
+                                           isTappable: true,
+                                           onTap: { [weak self] in
+                                               self?.performSegue(withIdentifier: "showRoutine", sender: nil)
+                                           }
+            )
         }
         else {
-            headerView.configureHeaderCell(text: "Session History")
+            headerView.configureHeaderCell(text: "Session History", showChevron: false, isTappable: false)
         }
         return headerView
     }
